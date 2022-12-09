@@ -1,0 +1,145 @@
+---
+ - name: Build test - Install Kubernetes
+   hosts: pm  
+   become_method: sudo
+   gather_facts: false
+   tasks: 
+#Configuring /etc/hosts
+     - name: Configure /etc/hosts
+       ansible.builtin.lineinfile:
+         path: /etc/hosts
+         state: present
+         line: '192.168.0.9    kubemaster'
+
+     - name: Configure /etc/hosts
+       ansible.builtin.lineinfile:
+         path: /etc/hosts
+         state: present
+         line: '192.168.0.10    kubenode1'
+
+     
+#Multiple shell commands
+     - name: Disable swap
+       ignore_errors: true
+       shell: |
+         swapoff -a
+         sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+#Multiple shell commands
+     - name: Kernel modules
+       ignore_errors: true
+       shell: |
+         sudo tee /etc/modules-load.d/containerd.conf <<EOF
+         overlay
+         br_netfilter
+         EOF
+
+#Multiple shell commands
+     - name: kernel modules
+       ignore_errors: true
+       shell: |
+         modprobe overlay
+         modprobe br_netfilter
+
+#Kernel parameters for Kubernetes
+     - name: Kernel parameters for Kubernetes
+       ignore_errors: true
+       shell: |
+         sudo tee /etc/sysctl.d/kubernetes.conf <<EOF
+         net.bridge.bridge-nf-call-ip6tables = 1
+         net.bridge.bridge-nf-call-iptables = 1
+         net.ipv4.ip_forward = 1
+         EOF
+         sysctl --system
+
+#Install packages.
+     - name: Install ubuntu software
+       apt:
+         name:
+           - lynis
+           - bpytop
+           - rkhunter
+           - duf
+           - ssh
+           - needrestart
+           - vim
+           - curl
+           - wget
+           - sysstat
+           - gnupg2
+           - software-properties-common
+           - apt-transport-https
+           - ca-certificates
+         state: present 
+         update_cache: true
+
+#Enable Docker.
+     - name: Add Docker GPG apt Key
+       apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+     - name: Add Docker Repository
+       apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+#Update repositories
+     - name: Update apt repo and cache on all Debian/Ubuntu boxes
+       apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+#Install containerd.io
+     - name: install containerd.io
+       apt:
+         name: containerd.io
+         state: present
+
+#Configure containerd so that it starts using systemd as cgroup
+     - name: Configure containerd so that it starts using systemd as cgroup.
+       shell: containerd config default | sudo tee /etc/containerd/config.toml >/dev/null 2>&1
+       ignore_errors: true
+     - name: Configure containerd so that it starts using systemd as cgroup.
+       shell: sudo sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
+       ignore_errors: true
+
+#Restart and enable containerd service
+     - name: Restart and enable containerd service.
+       ignore_errors: true
+       ansible.builtin.service: 
+         name: containerd
+         state: restarted
+         enabled: true
+
+#Add apt repository for Kubernetes
+     - name: Add apt repository for Kubernetes
+       shell: curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+       ignore_errors: true
+
+     - name: Add apt repository for Kubernetes
+       apt_repository:
+        repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+
+#Install Kubernetes components Kubectl, kubeadm & kubelet
+     - name: Update apt repo and cache on all Debian/Ubuntu boxes
+       apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+#Install kubelet
+     - name: install kubelet
+       apt:
+         name: kubelet
+         state: present
+#Install kubeadm
+     - name: install kubeadm
+       apt:
+         name: kubeadm
+         state: present
+#Install kubectl
+     - name: install kubectl
+       apt:
+         name: kubectl
+         state: present
+
+     - name: apt-mark hold kubelet kubeadm kubectl
+       shell: apt-mark hold kubelet kubeadm kubectl
+       ignore_errors: true
